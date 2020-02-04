@@ -219,6 +219,9 @@ CreateObject(CK_OBJECT_CLASS objClass,
         return NULL;
     }
 
+    /* only token objects used to be suported originally */
+    o->isTokenObj = CK_TRUE;
+
     nickname = strrchr(filename, '/');
     if (nickname)
         nickname++;

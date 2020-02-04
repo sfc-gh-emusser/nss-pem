@@ -237,9 +237,6 @@ const NSSItem
     case CKA_CLASS:
         plog("  fetch cert CKA_CLASS\n");
         return &pem_certClassItem;
-    case CKA_TOKEN:
-        plog("  fetch cert CKA_TOKEN\n");
-        return &pem_trueItem;
     case CKA_PRIVATE:
         return &pem_falseItem;
     case CKA_CERTIFICATE_TYPE:
@@ -295,7 +292,6 @@ pem_FetchPrivKeyAttribute
     switch (type) {
     case CKA_CLASS:
         return &pem_privKeyClassItem;
-    case CKA_TOKEN:
     case CKA_LOCAL:
     case CKA_SIGN:
     case CKA_DECRYPT:
@@ -421,7 +417,6 @@ pem_FetchPubKeyAttribute
     switch (type) {
     case CKA_CLASS:
         return &pem_pubKeyClassItem;
-    case CKA_TOKEN:
     case CKA_LOCAL:
     case CKA_ENCRYPT:
     case CKA_VERIFY:
@@ -478,8 +473,6 @@ pem_FetchTrustAttribute
     switch (type) {
     case CKA_CLASS:
         return &pem_trustClassItem;
-    case CKA_TOKEN:
-        return &pem_trueItem;
     case CKA_PRIVATE:
         return &pem_falseItem;
     case CKA_CERTIFICATE_TYPE:
@@ -563,6 +556,12 @@ pem_FetchAttribute
 )
 {
     CK_ULONG i;
+
+    if (CKA_TOKEN == type) {
+        return (io->isTokenObj)
+            ? &pem_trueItem
+            : &pem_falseItem;
+    }
 
     if (io->type == pemRaw) {
         for (i = 0; i < io->u.raw.n; i++) {
@@ -738,7 +737,8 @@ pem_mdObject_IsTokenObject
     NSSCKFWInstance * fwInstance
 )
 {
-    return CK_TRUE;
+    pemInternalObject *io = (pemInternalObject *) mdObject->etc;
+    return io->isTokenObj;
 }
 
 static CK_ULONG
@@ -1090,9 +1090,6 @@ pem_CreateObject
     int nobjs = 0;
     int i;
     long objid;
-#if 0
-    pemToken *token;
-#endif
     int cipher = 0;
     char *ivstring = NULL;
     pemInternalObject *listObj = NULL;
@@ -1106,10 +1103,6 @@ pem_CreateObject
     if (CKR_OK != *pError) {
         return (NSSCKMDObject *) NULL;
     }
-    if (!isToken) {
-        *pError = CKR_ATTRIBUTE_VALUE_INVALID;
-        return (NSSCKMDObject *) NULL;
-    }
 
     /* What slot are we adding the object to? */
     fwSlot = NSSCKFWSession_GetFWSlot(fwSession);
@@ -1119,10 +1112,6 @@ pem_CreateObject
 
     }
     slotID = NSSCKFWSlot_GetSlotID(fwSlot);
-
-#if 0
-    token = (pemToken *) mdToken->etc;
-#endif
 
     /*
      * only create keys and certs.
@@ -1155,6 +1144,9 @@ pem_CreateObject
         return NULL;
     }
 
+    /* store value of the CKA_TOKEN flag, so we can look it up later on */
+    listObj->isTokenObj = isToken;
+
     listItem = listObj->list = NSS_ZNEW(NULL, pemObjectListItem);
     if (NULL == listItem) {
         NSS_ZFreeIf(listObj);
@@ -1181,6 +1173,7 @@ pem_CreateObject
                 snprintf(nickname, sizeof nickname, "%s - %d", filename, c);
 
                 if (c) {
+                    listItem->io->isTokenObj = isToken;
                     APPEND_LIST_ITEM(listItem);
                 }
                 listItem->io = AddObjectIfNeeded(CKO_CERTIFICATE, pemCert,
@@ -1188,6 +1181,7 @@ pem_CreateObject
                                                  slotID, NULL);
                 if (listItem->io != NULL) {
                     /* Add the trust object */
+                    listItem->io->isTokenObj = isToken;
                     APPEND_LIST_ITEM(listItem);
                     listItem->io = AddObjectIfNeeded(CKO_NETSCAPE_TRUST, pemTrust,
                                                     derlist[c], NULL, nickname, 0,
@@ -1287,5 +1281,9 @@ pem_CreateObject
         pem_DestroyInternalObject(listObj);
         return (NSSCKMDObject *) NULL;
     }
+
+    /* store value of the CKA_TOKEN flag, so we can look it up later on */
+    listItem->io->isTokenObj = isToken;
+
     return pem_CreateMDObject(NULL, listObj, pError);
 }

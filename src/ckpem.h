@@ -211,6 +211,9 @@ struct pemInternalObjectStr {
   /* used by pem_mdFindObjects_Next */
   CK_BBOOL        extRef;
 
+  /* CK_TRUE for token object, CK_FALSE for session object */
+  CK_BBOOL        isTokenObj;
+
   /* If list != NULL, the object contains no useful data except of the list
    * of slave objects */
   pemObjectListItem *list;
